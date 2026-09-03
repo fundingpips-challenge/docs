@@ -120,7 +120,18 @@ not reach for Backtrack to undo a deploy.
 
 ## Failure scenario: the Aurora writer fails
 
-Incident response is manual. There is no pipeline for this.
+An unplanned failure is incident response: manual, because nobody chooses
+when it happens. Deliberately testing failover is a pipeline, `failover-test.yml`,
+manual trigger only and never on a PR or a push, since it forces a real
+failover on a real cluster:
+
+```
+Actions -> Aurora failover test -> Run workflow -> choose environment
+```
+
+It runs the same probe as below, forces the failover, and fails the job if
+downtime exceeds the 5 minute RTO. Needs a reader instance to fail over to;
+set `db_reader_count > 0` for that environment first if it does not have one.
 
 ### What you see
 
@@ -142,7 +153,7 @@ application reconnects. Confirm it happened and do not restart pods underneath
 it; they recover on their own, and restarting adds cold connection pools to a
 degraded system.
 
-To force one:
+To force one outside the pipeline, e.g. the pipeline itself is unavailable:
 
 ```bash
 aws rds failover-db-cluster \
