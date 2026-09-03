@@ -48,16 +48,18 @@ demand, against one environment or all three, without a PR:
 Actions -> Terraform checks -> Run workflow -> choose environment
 ```
 
-On merge, `apply.yml` applies **dev** automatically. Staging and production are
-manual, triggered the same way, with the environment and (for the app layer)
-the instance passed in as inputs:
+Applying is always manual, every environment, including dev. Merging does not
+apply anything by itself.
 
 ```
-Actions -> Terraform apply -> Run workflow -> choose environment
+Actions -> Terraform -> Run workflow -> action: apply -> choose environment
 ```
 
-Layers run as chained jobs, so `platform` completes before `addons` starts and
-`app` last. That ordering is enforced by the pipeline, not by remembering it.
+`terraform.yml` takes `action` (`apply` or `destroy`) as an input rather than
+being two separate workflows, so there is one place to look and one history to
+read. Layers run as chained jobs, so `platform` completes before `addons`
+starts and `app` last. That ordering is enforced by the pipeline, not by
+remembering it.
 
 ### What deploys slowly on purpose
 
@@ -91,7 +93,8 @@ git push
 ```
 
 For an application change Flux picks it up within a minute. For infrastructure,
-merge triggers `apply.yml` for dev; use Run workflow for staging or production.
+revert the commit, then run `terraform.yml` with `action: apply` against the
+affected environment; nothing applies on its own.
 
 ### Break glass
 
@@ -218,12 +221,13 @@ is never what customers land on.
 ## Tearing an environment down
 
 ```
-Actions -> Terraform destroy -> Run workflow
+Actions -> Terraform -> Run workflow -> action: destroy -> choose environment
 ```
 
 Dev and staging only, and you must retype the environment name to confirm.
-Production is deliberately absent; removing it is a decision that should not be
-one click away.
+Production is blocked in the pipeline's guard job even though it is a valid
+choice in the dropdown; removing it is a decision that should not be one click
+away.
 
 The workflow removes application workloads first so Karpenter releases its nodes
 while its controller still runs, destroys `addons` then `platform`, and asserts
