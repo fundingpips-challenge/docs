@@ -39,12 +39,18 @@ flux reconcile helmrelease app -n fpips-$ENV-main
 
 ### Infrastructure
 
-Open a PR. `pr.yml` runs Trivy, `fmt`, `validate` across all four layers, and a
-plan per environment commented on the PR. Trivy fails the build on CRITICAL or
-HIGH and is not allowed to fail.
+Open a PR. `checks.yml` runs Trivy, `fmt`, `validate` across all four layers,
+and a plan per environment commented on the PR. Trivy fails the build on
+CRITICAL or HIGH and is not allowed to fail. The same workflow also runs on
+demand, against one environment or all three, without a PR:
+
+```
+Actions -> Terraform checks -> Run workflow -> choose environment
+```
 
 On merge, `apply.yml` applies **dev** automatically. Staging and production are
-manual:
+manual, triggered the same way, with the environment and (for the app layer)
+the instance passed in as inputs:
 
 ```
 Actions -> Terraform apply -> Run workflow -> choose environment
