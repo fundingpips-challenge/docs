@@ -1,0 +1,39 @@
+site_name: FundingPips Platform Engineering Exercise
+site_description: Design decisions and operational runbook for the trading platform infrastructure
+site_url: https://fundingpips-challenge.github.io/docs/
+repo_url: https://github.com/fundingpips-challenge/docs
+edit_uri: ""
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - toc.integrate
+
+nav:
+  - Home: index.md
+  - Design: design.md
+  - Runbook: runbook.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.details
