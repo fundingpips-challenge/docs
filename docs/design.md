@@ -69,6 +69,18 @@ Fargate selection is by pod label, not namespace, so the rest of `kube-system`
 stays on cheaper EC2. Five NodePools on Bottlerocket arm64: one untainted
 `system`, four tainted application pools.
 
+Dev's "spin up multiple instances for parallel dev work" is answered by the
+`app` layer's `instance` variable, not by cloning `platform`. `platform` and
+`addons` build one shared dev baseline, VPC, EKS cluster, Aurora cluster,
+Valkey; `app` is applied once per instance against that baseline, keyed by
+`instance` in its state path (`environments/dev/app/<instance>.tfstate`), and
+provisions that instance's slice: a Kubernetes namespace, a Route53 record,
+an IAM role, and a dedicated Aurora schema and Valkey key prefix so instance
+`bravo`'s Sidekiq never pops instance `alpha`'s job. Stable team instances
+(`payments`, `trading`) get a committed `dev-<instance>.tfvars`; a throwaway
+one is `terraform apply -var instance=bravo` with no file committed at all,
+so standing one up or tearing it down is never a pull request.
+
 ## Decisions
 
 ### Traffic
@@ -236,6 +248,12 @@ release, drop later once the rollback window passes. This is the real answer to
 itself, out of band from the deploy, so a rollback never re-runs one by
 accident.
 
+This currently relies on review discipline, not a control: nothing stops a
+migration PR from carrying a `DROP COLUMN` in the same release as the code
+that needs it. A CI check that fails a migration diff on destructive DDL
+(drop, rename, non-nullable-without-default) is the natural next step, not
+built here because it is a code-review policy, not infrastructure.
+
 ### Observability
 
 Two pipelines, not one. An OpenTelemetry Collector receives OTLP (the
@@ -258,6 +276,20 @@ queue wait and database call, needs the app's own instrumentation to emit
 those spans. No application code is part of this exercise, so that part is
 architecture the collector is ready for, not evidence, the same boundary
 drawn everywhere else app code would be required.
+
+Concretely, when a customer says the site is slow, the answer is one trace
+ID, not a support ticket. `web`'s RED trio, request rate, 5xx rate, p50/p95/p99
+latency per route, says whether the browser-facing tier is degraded at all,
+and a rising p95 against a flat request rate rules out a traffic spike as the
+cause. If `web` looks clean, the same trace continues into the job it
+enqueued: `worker`'s queue-wait metric, time from enqueue to first pickup, is
+the next checkpoint, alerting on `critical` past the 60s p95 the brief sets
+and on a looser bound for the other three queues. If queue wait is also
+clean, the trace's last span is the Aurora query itself, which narrows a slow
+database to one SQL statement instead of "the database". Good looks like web
+p95 under 300ms, `critical` queue wait p95 under 60s, and no single DB span
+over 100ms, whichever of the three breaks first is the answer, read off the
+trace in minutes rather than reasoned out from logs.
 
 ## Cost
 
