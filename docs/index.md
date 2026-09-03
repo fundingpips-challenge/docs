@@ -24,12 +24,18 @@ failover worked through end to end.
 
 ## A note on what was tested
 
-This was built against a real AWS account rather than only planned. The
-infrastructure was applied, the application chart was reconciled onto a live
-cluster by Flux, and the Aurora failover in the runbook is measured rather than
-estimated: 24.8 seconds of write unavailability, zero acknowledged writes lost.
+This was built against a real AWS account rather than only planned: applied
+through the pipelines, not a laptop, with the application chart reconciled
+onto a live cluster by Flux, real workloads reaching `Running`, and the Aurora
+failover in the runbook measured rather than estimated, twice, once by hand
+and once by its own dedicated pipeline: 24.8 seconds and 21.1 seconds of write
+unavailability across the two runs, both well inside the 5 minute requirement,
+zero acknowledged writes lost.
 
-That approach earned its keep. Four defects only appeared at apply time, and two
-of them left a fully green `terraform apply` over a cluster that could not have
-worked. They are written up in the design document rather than quietly fixed,
-because how a system fails is more interesting than a clean first run.
+That approach earned its keep. Nine defects only appeared at apply, deploy, or
+destroy time, several with a fully green `terraform apply` or `plan` sitting
+over a cluster that could not have worked. They are written up in the design
+document rather than quietly fixed, because how a system fails is more
+interesting than a clean first run. If you have access to the infrastructure
+repository, its Actions history is the actual record of this: every apply,
+the failover test, and the destroy that tore it back down again.

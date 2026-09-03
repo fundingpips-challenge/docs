@@ -219,8 +219,9 @@ facing nodes take ~34 percent off them, which beats any Kubernetes tuning.
 
 ## How it fails
 
-Built against a real account. Five defects passed `fmt`, `validate` and `plan`
-cleanly; two left a green apply over a broken cluster.
+Built against a real account. Nine defects passed `fmt`, `validate` and `plan`
+cleanly; most left no error at all until a live apply, deploy, or destroy was
+actually watched rather than trusted.
 
 | Defect | Effect |
 | --- | --- |
@@ -228,6 +229,10 @@ cleanly; two left a green apply over a broken cluster.
 | ALB controller webhook on all Services, `failurePolicy: Fail`, no selector | Its own pods were pending, so the webhook had no endpoints, so every Service creation failed, including Karpenter's, which would have provided the node it needed |
 | ClusterSecretStore using `auth.jwt` against a Pod Identity trust policy | ESO could not authenticate. Same class as leaving an IRSA annotation after migrating |
 | CI role trust policy matched `sub` on the plain `owner/repo` string | GitHub's actual token nests `@<numeric id>` after the org and repo names and appends `:environment:<name>` for a gated job; every environment-gated run failed OIDC before touching Terraform. Fixed by matching both `sub` forms plus the separate, format-stable `repository` claim |
+| Terraform's Helm provider diffs on `values`/`version`, not chart file contents; Flux's default `reconcileStrategy` only repackages on a `Chart.yaml` version bump | A chart-only edit reported "No changes" and silently never deployed, in two unrelated layers, for two different reasons, until measured against the live cluster rather than the plan output |
+| Karpenter's controller IAM policy was missing `iam:ListInstanceProfiles` | The `EC2NodeClass` termination finalizer retried that call forever with `AccessDenied` during teardown, with no self-resolving path. Found live, mid-destroy |
+| 11 of 14 boot secrets had a container but no value; ESO fails the whole `ExternalSecret` on any one missing key | Every app pod was blocked from booting from the first deploy, not from anything changed that day |
+| A placeholder image built amd64 on the CI runner against arm64 Bottlerocket nodes, then cached under a mutable tag | Pods pulled fine and crashed with `exec format error`; rebuilding correctly did not fix nodes that had already cached the bad layer |
 | Stale pins: 5 Helm charts, an Aurora engine version, a deprecated attribute | Only apply notices. Pinning is right for a database, but pins rot |
 
 | Failure | Behaviour | Recovery |

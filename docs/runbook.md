@@ -251,6 +251,20 @@ uninstall timeout and produce `Error: Error uninstalling release`. That is not a
 broken teardown. Never delete the EC2 instances by hand: that strands a
 NodeClaim holding a finalizer with nothing left to clear it.
 
+If `destroy platform` fails on `DependencyViolation` deleting a subnet or
+security group, look for an orphaned ENI first:
+
+```bash
+aws ec2 describe-network-interfaces --region eu-west-1 \
+  --filters "Name=vpc-id,Values=<vpc-id>" \
+  --query 'NetworkInterfaces[].[NetworkInterfaceId,Status,Description]'
+```
+
+The VPC CNI occasionally leaves one behind when a node terminates abruptly.
+One with `Status: available` (detached) and no live instance behind its
+description is safe to delete by hand; re-running the destroy then clears the
+subnet and security group that were waiting on it.
+
 Two things survive a destroy and keep costing money. KMS keys are scheduled for
 deletion with a 30 day window. Elastic IPs in staging and production carry
 `prevent_destroy`, because releasing an address a payment provider has
