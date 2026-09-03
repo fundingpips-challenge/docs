@@ -156,10 +156,11 @@ coexist, and an LRU queue violates "never silently lost". So a `cache` group
 (LRU, no snapshots) and a `queue` group (noeviction, snapshotted). A validation
 block rejects an evicting queue group.
 
-**AOF was rejected because it does not exist.** AWS documents `appendonly` as
-unsupported past Redis 2.8.22, and Multi-AZ and AOF as mutually exclusive.
-Enabling it would have cost the failover that satisfies the actual requirement.
-Durability is Multi-AZ failover, daily snapshots, and `super_fetch`.
+**AOF (Append Only File, Redis's write-ahead log) was rejected because it does
+not exist here.** AWS documents `appendonly` as unsupported past Redis 2.8.22,
+and Multi-AZ and AOF as mutually exclusive. Enabling it would have cost the
+failover that satisfies the actual requirement. Durability is Multi-AZ
+failover, daily snapshots, and `super_fetch`.
 
 ### Network
 
@@ -206,9 +207,10 @@ restarts a year.
 
 ### Identity
 
-Pod Identity everywhere on EC2. IRSA for Karpenter alone, because it runs on
-Fargate and AWS documents Pod Identity as unavailable there. An exception with a
-reason beats pretending the cluster is uniform.
+Pod Identity everywhere on EC2. IRSA (IAM Roles for Service Accounts, the
+older mechanism Pod Identity replaces) for Karpenter alone, because it runs
+on Fargate and AWS documents Pod Identity as unavailable there. An exception
+with a reason beats pretending the cluster is uniform.
 
 Rejected: a small managed node group for cluster critical add-ons, allowing
 uniform Pod Identity at the cost of two always on instances per environment.
