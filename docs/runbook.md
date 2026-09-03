@@ -252,7 +252,8 @@ broken teardown. Never delete the EC2 instances by hand: that strands a
 NodeClaim holding a finalizer with nothing left to clear it.
 
 If `destroy platform` fails on `DependencyViolation` deleting a subnet or
-security group, look for an orphaned ENI first:
+security group, look for an orphaned ENI (Elastic Network Interface, the
+virtual network card AWS attaches to a running instance) first:
 
 ```bash
 aws ec2 describe-network-interfaces --region eu-west-1 \
@@ -260,7 +261,8 @@ aws ec2 describe-network-interfaces --region eu-west-1 \
   --query 'NetworkInterfaces[].[NetworkInterfaceId,Status,Description]'
 ```
 
-The VPC CNI occasionally leaves one behind when a node terminates abruptly.
+The VPC CNI (Container Network Interface, the plugin that wires pod
+networking) occasionally leaves one behind when a node terminates abruptly.
 One with `Status: available` (detached) and no live instance behind its
 description is safe to delete by hand; re-running the destroy then clears the
 subnet and security group that were waiting on it.

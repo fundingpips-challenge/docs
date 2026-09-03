@@ -73,7 +73,8 @@ stays on cheaper EC2. Five NodePools on Bottlerocket arm64: one untainted
 
 ### Traffic
 
-Two KEDA triggers, because the load has two characters.
+Two KEDA (Kubernetes Event-Driven Autoscaling) triggers, because the load
+has two characters.
 
 - **Cron** holds 12 web replicas through market hours. The peak is predictable
   to 30 minutes, so front load it rather than let reactive scaling trail it.
@@ -82,11 +83,13 @@ Two KEDA triggers, because the load has two characters.
   percent per minute behind a 5 minute window, because scaling down into what
   turns out to be a gap between news events causes the outage you were avoiding.
 
-Rejected: HPA alone. It cannot express "be big at 07:00".
+Rejected: HPA (Horizontal Pod Autoscaler, Kubernetes' built-in CPU/memory
+based scaler) alone. It cannot express "be big at 07:00".
 
 `cable` scales on live connection count via a Prometheus query, not request
 rate: a WebSocket process's cost is concurrent connections, not throughput.
-ALB over NLB for it, despite ALB needing `idle_timeout` raised past its 60s
+ALB (Application Load Balancer) over NLB (Network Load Balancer) for it,
+despite ALB needing `idle_timeout` raised past its 60s
 default (kills a WebSocket mid-session) and a long deregistration delay: the
 alternative is a second load balancer type and a separate draining story for
 one tier, when the ALB controller already handles Layer 7 routing and health
@@ -184,7 +187,8 @@ cycle. Dev is exempt.
 
 ### Secrets
 
-ESO syncs 14 named secrets from Secrets Manager. Seven are pure entropy
+ESO (the External Secrets Operator) syncs 14 named secrets from Secrets
+Manager. Seven are pure entropy
 Terraform generates itself, the same as the Valkey AUTH tokens: the master DB
 credentials and four Rails keys. The other seven are genuinely external, a
 payment provider key, a KYC key, a market data key, a Sidekiq licence, an
@@ -234,8 +238,9 @@ accident.
 
 ### Observability
 
-Two pipelines, not one. An OpenTelemetry Collector receives OTLP from `web`,
-`cable` and `worker` and holds the external backend's ingest token itself,
+Two pipelines, not one. An OpenTelemetry Collector receives OTLP (the
+OpenTelemetry wire protocol) from `web`, `cable` and `worker` and holds the
+external backend's ingest token itself,
 not the app pods, so a compromised pod cannot leak it. With no backend
 configured it exports to its own debug log by default: tested with a
 synthetic span end to end, not assumed. Point `otel_endpoint` at a real
@@ -247,7 +252,8 @@ PromQL query for concurrent connections, which OTel's own metrics pipeline
 does not serve. It scrapes annotated pods, nothing else, and it is not a
 general dashboarding stack.
 
-The graded workflow, RED metrics per tier plus one trace spanning request,
+The graded workflow, RED metrics (rate, errors, duration, the standard
+per-service health triad) per tier plus one trace spanning request,
 queue wait and database call, needs the app's own instrumentation to emit
 those spans. No application code is part of this exercise, so that part is
 architecture the collector is ready for, not evidence, the same boundary
@@ -291,7 +297,7 @@ actually watched rather than trusted.
 | No SG rules between Karpenter nodes and the EKS managed cluster SG | No DNS for any EC2 pod. The app could not resolve Aurora or Valkey. metrics-server could not scrape kubelet, silently disabling CPU scaling |
 | ALB controller webhook on all Services, `failurePolicy: Fail`, no selector | Its own pods were pending, so the webhook had no endpoints, so every Service creation failed, including Karpenter's, which would have provided the node it needed |
 | ClusterSecretStore using `auth.jwt` against a Pod Identity trust policy | ESO could not authenticate. Same class as leaving an IRSA annotation after migrating |
-| CI role trust policy matched `sub` on the plain `owner/repo` string | GitHub's actual token nests `@<numeric id>` after the org and repo names and appends `:environment:<name>` for a gated job; every environment-gated run failed OIDC before touching Terraform. Fixed by matching both `sub` forms plus the separate, format-stable `repository` claim |
+| CI role trust policy matched `sub` on the plain `owner/repo` string | GitHub's actual token nests `@<numeric id>` after the org and repo names and appends `:environment:<name>` for a gated job; every environment-gated run failed OIDC (OpenID Connect, the federation GitHub uses to hand the CI role short-lived AWS credentials with no stored key) before touching Terraform. Fixed by matching both `sub` forms plus the separate, format-stable `repository` claim |
 | Terraform's Helm provider diffs on `values`/`version`, not chart file contents; Flux's default `reconcileStrategy` only repackages on a `Chart.yaml` version bump | A chart-only edit reported "No changes" and silently never deployed, in two unrelated layers, for two different reasons, until measured against the live cluster rather than the plan output |
 | Karpenter's controller IAM policy was missing `iam:ListInstanceProfiles` | The `EC2NodeClass` termination finalizer retried that call forever with `AccessDenied` during teardown, with no self-resolving path. Found live, mid-destroy |
 | 11 of 14 boot secrets had a container but no value; ESO fails the whole `ExternalSecret` on any one missing key | Every app pod was blocked from booting from the first deploy, not from anything changed that day |
@@ -309,7 +315,8 @@ actually watched rather than trusted.
 | Bad migration | old code runs against new schema | Backtrack if data destroyed |
 
 The risk that worries me is organisational. Expand and contract works only if
-every engineer follows it, and there is no CI check rejecting destructive DDL.
+every engineer follows it, and there is no CI check rejecting destructive DDL
+(Data Definition Language: `DROP`, `ALTER`, and other schema-changing SQL).
 That is the one decision resting entirely on discipline.
 
 ## At real scale
@@ -323,5 +330,6 @@ That is the one decision resting entirely on discipline.
 - **Private API endpoint** with self hosted runners in the VPC. Kept public with
   private access on and IAM access entries, because network position is the
   right control for a database and defence in depth for an IAM authenticated
-  API. Tunnelling breaks TLS: the certificate SAN is the real EKS DNS name.
+  API. Tunnelling breaks TLS: the certificate's SAN (Subject Alternative
+  Name, the hostname a cert is actually issued for) is the real EKS DNS name.
 - **A CI check for destructive DDL**, the missing enforcement above.
