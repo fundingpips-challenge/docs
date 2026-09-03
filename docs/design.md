@@ -219,7 +219,7 @@ facing nodes take ~34 percent off them, which beats any Kubernetes tuning.
 
 ## How it fails
 
-Built against a real account. Four defects passed `fmt`, `validate` and `plan`
+Built against a real account. Five defects passed `fmt`, `validate` and `plan`
 cleanly; two left a green apply over a broken cluster.
 
 | Defect | Effect |
@@ -227,6 +227,7 @@ cleanly; two left a green apply over a broken cluster.
 | No SG rules between Karpenter nodes and the EKS managed cluster SG | No DNS for any EC2 pod. The app could not resolve Aurora or Valkey. metrics-server could not scrape kubelet, silently disabling CPU scaling |
 | ALB controller webhook on all Services, `failurePolicy: Fail`, no selector | Its own pods were pending, so the webhook had no endpoints, so every Service creation failed, including Karpenter's, which would have provided the node it needed |
 | ClusterSecretStore using `auth.jwt` against a Pod Identity trust policy | ESO could not authenticate. Same class as leaving an IRSA annotation after migrating |
+| CI role trust policy matched `sub` on the plain `owner/repo` string | GitHub's actual token nests `@<numeric id>` after the org and repo names and appends `:environment:<name>` for a gated job; every environment-gated run failed OIDC before touching Terraform. Fixed by matching both `sub` forms plus the separate, format-stable `repository` claim |
 | Stale pins: 5 Helm charts, an Aurora engine version, a deprecated attribute | Only apply notices. Pinning is right for a database, but pins rot |
 
 | Failure | Behaviour | Recovery |
