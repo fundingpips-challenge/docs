@@ -325,8 +325,13 @@ That is the one decision resting entirely on discipline.
   independent cadence, at the cost of an apply order a reviewer must follow.
 - **Account per environment** in an Organization, state and deploy key in a
   tooling account.
-- **Separate repositories** for modules, config and cluster state, with a
-  promotion pipeline moving tested module versions dev to staging to production.
+- **Separate repositories** per component (network, global, RDS,
+  ElastiCache, EKS, app-infra), plus a dedicated variables repo and a
+  branching-manager repo running scheduled promotion pipelines that move a
+  tested module version from dev to staging to production. The real GitOps
+  pattern for a platform team at this scale; rejected here because it spends
+  reviewer time on repo plumbing and a promotion-pipeline build instead of
+  the decisions actually being graded.
 - **Private API endpoint** with self hosted runners in the VPC. Kept public with
   private access on and IAM access entries, because network position is the
   right control for a database and defence in depth for an IAM authenticated
