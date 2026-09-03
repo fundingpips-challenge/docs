@@ -22,6 +22,8 @@ Questions I would have sent first:
 
 ## Structure
 
+![Platform architecture: GitHub Actions and Flux deploy into a single AWS account holding dev, staging and production VPCs, production shown in full detail with public, private app and private data subnets.](assets/architecture.svg)
+
 ```
 bootstrap -> platform -> addons -> app
 ```
@@ -29,6 +31,30 @@ bootstrap -> platform -> addons -> app
 Each layer has its own state. `bootstrap` runs once per account: state bucket,
 Git deploy key, CI role. `platform` is the per environment baseline. `addons`
 installs in cluster components via Helm. `app` holds per instance resources.
+
+```
+infrastructure/
+├── bootstrap/            # state bucket, Flux deploy key, GitHub OIDC + CI role
+├── platform/              # per environment: calls modules/*
+├── addons/                # per environment: Helm releases onto the cluster
+├── app/                   # per instance: S3, IAM, Route53
+├── environments/
+│   ├── dev.tfvars
+│   ├── staging.tfvars
+│   └── production.tfvars  # one file per environment, read by every layer
+├── modules/
+│   ├── networking/        # vpc, subnets, NAT+EIP set, route tables
+│   ├── eks/                # cluster, Fargate profiles, Karpenter IAM
+│   ├── eks-addons/          # karpenter, keda, eso, reloader, otel, prometheus, flux
+│   ├── rds/                # aurora, multi-az, reader + reporting endpoints
+│   ├── elasticache/         # valkey, instantiated twice: cache, queue
+│   └── secrets/             # 14 named secrets in Secrets Manager
+├── kubernetes/charts/app/  # web, cable, worker Deployments, deployed by Flux
+└── .github/workflows/
+    ├── checks.yml           # PR: Trivy, fmt, validate, plan
+    ├── terraform.yml         # manual: apply or destroy
+    └── failover-test.yml      # manual: forces and measures an Aurora failover
+```
 
 Three layers rather than two is forced: Terraform configures providers before it
 plans, so Helm and Kubernetes providers cannot point at a cluster that does not
