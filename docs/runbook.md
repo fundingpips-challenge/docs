@@ -271,3 +271,47 @@ is in a different AZ than it started, which is fine and needs no action. The
 promotion tiers decide who gets promoted next time: customer facing readers sit
 at tier 1, and the finance reporting replica sits at tier 15 precisely so that
 a replica busy running a month end report is never what customers land on.
+
+## Tearing an environment down
+
+Destroy in reverse order: `addons`, then `platform`. Never the other way, and
+never `bootstrap`, which holds the state bucket and the shared deploy key.
+
+```bash
+make destroy ENV=dev LAYER=addons
+make destroy ENV=dev LAYER=platform
+```
+
+Remove the application workloads first, so pods drain and Karpenter releases
+nodes while its controller is still running.
+
+```bash
+kubectl delete helmrelease app -n fpips-$ENV-main
+```
+
+**Expect the addons destroy to need two passes on a busy cluster.** Karpenter
+puts a finalizer on its NodePools and holds it until every node it created is
+drained and terminated. On a cluster with several nodes that can outrun the
+Helm uninstall timeout, and Terraform reports:
+
+```
+Error: Error uninstalling release
+```
+
+That is not a broken teardown. Karpenter finishes the drain in its own time.
+Re-run the destroy and it completes in seconds. Do not start deleting EC2
+instances by hand: that strands a NodeClaim holding a finalizer nothing is left
+to clear, which is a genuinely awkward state to get out of.
+
+Confirm nothing was orphaned before you walk away. Karpenter provisioned nodes
+are not Terraform managed, so this is the check that matters:
+
+```bash
+aws ec2 describe-instances --region eu-west-1   --filters "Name=tag-key,Values=karpenter.sh/nodepool"              "Name=instance-state-name,Values=running,pending"   --query 'Reservations[].Instances[].InstanceId' --output text
+```
+
+Two things survive a destroy and keep costing money. KMS keys are scheduled for
+deletion rather than deleted, with a 30 day window, and continue to bill for
+that period. Elastic IPs in staging and production carry `prevent_destroy`,
+because releasing an address a payment provider has allowlisted is a five
+business day mistake, so Terraform will refuse to remove them by design.
