@@ -58,6 +58,14 @@ Two KEDA triggers, because the load has two characters.
 
 Rejected: HPA alone. It cannot express "be big at 07:00".
 
+`cable` scales on live connection count via a Prometheus query, not request
+rate: a WebSocket process's cost is concurrent connections, not throughput.
+ALB over NLB for it, despite ALB needing `idle_timeout` raised past its 60s
+default (kills a WebSocket mid-session) and a long deregistration delay: the
+alternative is a second load balancer type and a separate draining story for
+one tier, when the ALB controller already handles Layer 7 routing and health
+checks for `web`.
+
 ### Queues
 
 Four Deployments, one per queue. Sidekiq weights queues inside a process, but a
@@ -149,10 +157,21 @@ cycle. Dev is exempt.
 
 ### Secrets
 
-ESO syncs 14 named secrets from Secrets Manager. Terraform writes only the three
-it generates; third party keys get an encrypted container and a human fills the
-value. The two rotating quarterly are the payment provider keys, the same ones
-tied to the egress allowlist.
+ESO syncs 14 named secrets from Secrets Manager. Seven are pure entropy
+Terraform generates itself, the same as the Valkey AUTH tokens: the master DB
+credentials and four Rails keys. The other seven are genuinely external, a
+payment provider key, a KYC key, a market data key, a Sidekiq licence, an
+OTel ingest token, and the app's own least-privilege DB user, none of which
+Terraform can invent, and one of which it structurally cannot provision at
+all: the database is unreachable from a GitHub-hosted runner by design, so
+that user has to be created by something running inside the VPC, not by this
+pipeline.
+
+An `ExternalSecret` fails to sync as a whole if even one requested key has no
+value yet, found live: the app chart currently requests only the keys that
+have one, and the rest get added back as they're populated. The two rotating
+quarterly are the payment provider keys, the same ones tied to the egress
+allowlist.
 
 **Reloader** restarts pods on secret change. Rejected: file mounts with app side
 watching, because it needs application changes the platform team does not own
@@ -181,14 +200,30 @@ reconciliation. The runbook documents both paths and which to use.
 
 **Expand and contract** for schema changes: additive migration first in its own
 release, drop later once the rollback window passes. This is the real answer to
-"reversible in two minutes with schema changes".
+"reversible in two minutes with schema changes". Liquibase runs the migration
+itself, out of band from the deploy, so a rollback never re-runs one by
+accident.
 
 ### Observability
 
-OpenTelemetry, RED metrics per tier, one trace spanning request, queue wait and
-database call. The value is that "the site is slow" decomposes into a specific
-hop with an owner. Queue latency is also what KEDA scales on, so the SLO and the
-autoscaler read the same number.
+Two pipelines, not one. An OpenTelemetry Collector receives OTLP from `web`,
+`cable` and `worker` and holds the external backend's ingest token itself,
+not the app pods, so a compromised pod cannot leak it. With no backend
+configured it exports to its own debug log by default: tested with a
+synthetic span end to end, not assumed. Point `otel_endpoint` at a real
+OTLP backend (Elastic APM, Grafana Cloud, anything that speaks the protocol)
+to go further.
+
+Prometheus is separate and narrower: KEDA's `cable` trigger needs a live
+PromQL query for concurrent connections, which OTel's own metrics pipeline
+does not serve. It scrapes annotated pods, nothing else, and it is not a
+general dashboarding stack.
+
+The graded workflow, RED metrics per tier plus one trace spanning request,
+queue wait and database call, needs the app's own instrumentation to emit
+those spans. No application code is part of this exercise, so that part is
+architecture the collector is ready for, not evidence, the same boundary
+drawn everywhere else app code would be required.
 
 ## Cost
 
